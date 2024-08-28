@@ -4,9 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-url = "2.5.2"
 reqwest = { version = "0.12.5", features = ["cookies"]}
 tokio = { version = "1.39.3", features = ["full"] }
 env_logger = "0.11.5"
 log = "0.4.22"
-fantoccini = { version = "0.21.1", features = ["rustls-tls"] }
+
