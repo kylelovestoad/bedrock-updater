@@ -1,31 +1,46 @@
+use std::{str::Utf8Error, string::FromUtf8Error};
 
-use std::{
-    error::Error, 
-    fmt::{Debug, Display},
-};
+use tracing::subscriber::SetGlobalDefaultError;
+use url::ParseError;
 
-#[derive(Debug)] 
+use scraper::error::SelectorErrorKind;
+
+#[derive(thiserror::Error, Debug)] 
 #[allow(dead_code)]
 pub enum BedrockUpdaterError {
-    RequestError(reqwest::Error),
-}
-
-impl Display for BedrockUpdaterError {
-    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        todo!()
-    }
-}
-
-impl Error for BedrockUpdaterError {
-    fn description(&self) -> &str {
-        match self {
-            Self::RequestError(_) => "request failed"
-        }
-    }
-}
-
-impl From<reqwest::Error> for BedrockUpdaterError {
-    fn from(err: reqwest::Error) -> BedrockUpdaterError {
-        Self::RequestError(err)
-    }
+    #[error(transparent)]
+    RequestError(#[from] reqwest::Error),
+    #[error(transparent)]
+    SelectorParseError(#[from] SelectorErrorKind<'static>),
+    #[error("no download element found")]
+    NoDownloadElement,
+    #[error("too many download elements found, this probably means the page changed")]
+    TooManyDownloadElements,
+    #[error("no downloadlink attribute")]
+    NoDownloadLinkAttr,
+    #[error("no href attribute found, or invalid url")]
+    NotFileUrl(()),
+    #[error(transparent)]
+    CannotParseUrl(#[from] ParseError),
+    #[error("file name terminates in ..")]
+    NoFileName,
+    #[error(transparent)]
+    PatternError(#[from] regex::Error),
+    #[error("could not find version string in filename")]
+    NoVersionString,
+    #[error("could not parse version number")]
+    UnparseableVersion,
+    #[error("file not found")]
+    FileNotFound(#[from] std::io::Error),
+    #[error("could not join path")]
+    PathJoinError,
+    #[error("string is not valid utf-8")]
+    Utf8Error(#[from] FromUtf8Error),
+    #[/* TODO */error("unable to find version in file, use")]
+    NoCurrentVersion,
+    #[error("broken symlink to server path")]
+    BrokenServerPathSymlink,
+    #[error("setting global default tracing subscriber failed")]
+    GlobalSubscriberFailed(#[from] SetGlobalDefaultError)
+    
 }
