@@ -4,9 +4,9 @@ use tracing::subscriber::SetGlobalDefaultError;
 use url::ParseError;
 
 use scraper::error::SelectorErrorKind;
+use zip_extract::ZipExtractError;
 
-#[derive(thiserror::Error, Debug)] 
-#[allow(dead_code)]
+#[derive(thiserror::Error, Debug)]
 pub enum BedrockUpdaterError {
     #[error(transparent)]
     RequestError(#[from] reqwest::Error),
@@ -16,10 +16,8 @@ pub enum BedrockUpdaterError {
     NoDownloadElement,
     #[error("too many download elements found, this probably means the page changed")]
     TooManyDownloadElements,
-    #[error("no downloadlink attribute")]
+    #[error("no href attribute found")]
     NoDownloadLinkAttr,
-    #[error("no href attribute found, or invalid url")]
-    NotFileUrl(()),
     #[error(transparent)]
     CannotParseUrl(#[from] ParseError),
     #[error("file name terminates in ..")]
@@ -32,15 +30,16 @@ pub enum BedrockUpdaterError {
     UnparseableVersion,
     #[error("file not found")]
     FileNotFound(#[from] std::io::Error),
-    #[error("could not join path")]
-    PathJoinError,
     #[error("string is not valid utf-8")]
-    Utf8Error(#[from] FromUtf8Error),
+    FromUtf8Error(#[from] FromUtf8Error),
+    #[error("string slice is not valid utf-8")]
+    Utf8Error(#[from] Utf8Error),
     #[/* TODO */error("unable to find version in file, use")]
     NoCurrentVersion,
-    #[error("broken symlink to server path")]
-    BrokenServerPathSymlink,
+    #[error("server path does not exist")]
+    NoServerPath,
     #[error("setting global default tracing subscriber failed")]
-    GlobalSubscriberFailed(#[from] SetGlobalDefaultError)
-    
+    GlobalSubscriberFailed(#[from] SetGlobalDefaultError),
+    #[error("server zip extraction failed. did the download link download the correct file?")]
+    ServerZipExtractFailed(#[from] ZipExtractError)
 }

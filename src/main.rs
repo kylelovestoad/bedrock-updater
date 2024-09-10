@@ -1,12 +1,13 @@
-use std::path::Path;
+use std::{io::Cursor, path::Path};
 
 use regex::Regex;
 use reqwest::{
     header::{ACCEPT, ACCEPT_ENCODING, ACCEPT_LANGUAGE, CONNECTION},
-    Url,
+    Client, RequestBuilder, Url,
 };
 use scraper::{Html, Selector};
-use tracing::{debug, debug_span, info, warn, warn_span};
+use tracing::{warn, warn_span};
+use tracing::info;
 use version_compare::Version;
 
 use crate::error::BedrockUpdaterError;
@@ -33,8 +34,34 @@ macro_rules! selector {
     };
 }
 
+trait CommonHeaders {
+    fn add_common_headers(self) -> RequestBuilder;
+}
+
+impl CommonHeaders for RequestBuilder {
+    fn add_common_headers(self) -> RequestBuilder {
+        self.header(ACCEPT, "text/html")
+            .header(ACCEPT_LANGUAGE, "en-US,en;q=0.5")
+            .header(ACCEPT_ENCODING, "gzip")
+            .header(CONNECTION, "keep-alive")
+    }
+}
+
+trait ElseErr {
+    fn else_err<E>(self, err: E) -> Result<(), E>;
+}
+
+impl ElseErr for bool {
+    fn else_err<E>(self, err: E) -> Result<(), E> {
+        match self {
+            true => Ok(()),
+            false => Err(err),
+        }
+    }
+}
+
 #[tracing::instrument]
-async fn get_latest_download_link<'a>(document: Html) -> Result<Url, BedrockUpdaterError> {
+async fn get_latest_download_link<'a>(document: &Html) -> Result<Url, BedrockUpdaterError> {
     let unparsed_selector = selector!();
 
     let download_selector = Selector::parse(&unparsed_selector)?;
@@ -85,16 +112,16 @@ async fn get_current_version<'a, T>(
     file_path: T,
     contents: Option<&'a str>,
     version_to_set: Option<&'a str>,
-) -> Result<&'a str, BedrockUpdaterError> 
+) -> Result<&'a str, BedrockUpdaterError>
 where
-    T: AsRef<Path> + std::fmt::Debug
+    T: AsRef<Path> + std::fmt::Debug,
 {
     info!("getting current version");
     let version_res = match (version_to_set, contents) {
         (None, None) => Err(BedrockUpdaterError::NoCurrentVersion),
         (None, Some(contents)) => Ok(contents),
         (Some(version), None) | (Some(version), Some(_)) => {
-            tokio::fs::write(&file_path, &version).await?;
+            std::fs::write(&file_path, &version)?;
 
             Ok(version)
         }
@@ -109,68 +136,81 @@ async fn get_versions<'a, T>(
     version_path: T,
     contents: Option<&'a str>,
     set_first_version: Option<&'a str>,
-) -> Result<(Version<'a>, Version<'a>), BedrockUpdaterError> 
+) -> Result<(Version<'a>, Version<'a>), BedrockUpdaterError>
 where
-    T: AsRef<Path> + std::fmt::Debug + 'a
+    T: AsRef<Path> + std::fmt::Debug + 'a,
 {
     info!("getting versions");
     let latest_version_string = get_latest_version(file_path);
 
-    let current_version_string = get_current_version(
-        version_path, 
-        contents,
-        set_first_version,
-    );
+    let current_version_string = get_current_version(version_path, contents, set_first_version);
 
-    let latest_version =
-        Version::from(latest_version_string.await?).ok_or(BedrockUpdaterError::UnparseableVersion)?;
-    let current_version =
-        Version::from(current_version_string.await?).ok_or(BedrockUpdaterError::UnparseableVersion)?;
+    let current_version = Version::from(current_version_string.await?)
+        .ok_or(BedrockUpdaterError::UnparseableVersion)?;
+    let latest_version = Version::from(latest_version_string.await?)
+        .ok_or(BedrockUpdaterError::UnparseableVersion)?;
 
     Ok((current_version, latest_version))
 }
 
-#[tokio::main]
-async fn main() -> Result<(), BedrockUpdaterError> {
+#[tracing::instrument(skip_all)]
+async fn install_server<T>(
+    client: &Client,
+    download_link: Url,
+    update_dir: T,
+) -> Result<(), BedrockUpdaterError>
+where
+    T: AsRef<Path>,
+{
+    let download_request = client.get(download_link);
 
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber)?;
+    let bedrock_server_zip = download_request
+        .send()
+        .await?
+        .bytes()
+        .await?;
 
+    std::fs::create_dir_all(&update_dir)?;
 
-    let args = Args::parse();
+    zip_extract::extract(Cursor::new(bedrock_server_zip), update_dir.as_ref(), true)?;
 
-    let client = reqwest::ClientBuilder::new()
-        .build()?
-        .get(BEDROCK_SERVER_PAGE)
-        .header(ACCEPT, "text/html")
-        .header(ACCEPT_LANGUAGE, "en-US,en;q=0.5")
-        .header(ACCEPT_ENCODING, "gzip")
-        .header(CONNECTION, "keep-alive");
+    Ok(())
+}
 
-    let html = client.send().await?.text().await?;
+async fn fetch_document(client: &Client) -> Result<Html, BedrockUpdaterError> {
+    let page_request = client.get(BEDROCK_SERVER_PAGE).add_common_headers();
+
+    let html = page_request.send().await?.text().await?;
 
     let document = Html::parse_document(&html);
 
-    let download_link = get_latest_download_link(document).await?;
+    Ok(document)
+}
+
+#[tokio::main]
+async fn main() -> Result<(), BedrockUpdaterError> {
+    let subscriber = tracing_subscriber::FmtSubscriber::new();
+    tracing::subscriber::set_global_default(subscriber)?;
+
+    let args = Args::parse();
+
+    let client = reqwest::ClientBuilder::new().build()?;
+
+    let document = fetch_document(&client).await?;
+
+    let download_link = get_latest_download_link(&document).await?;
 
     let file_path = Path::new(download_link.path());
 
     let server_path = Path::new(&args.server_path);
 
-    let server_path_symlink = tokio::fs::try_exists(server_path).await?;
+    server_path
+        .exists()
+        .else_err(BedrockUpdaterError::NoServerPath)?;
 
-    if !server_path_symlink {
-        return Err(BedrockUpdaterError::BrokenServerPathSymlink)
-    }
+    let version_path = server_path.join(args.version_file);
 
-    let version_path = server_path_symlink
-        .then_some(server_path.join(args.version_file))
-        .ok_or(BedrockUpdaterError::PathJoinError)?;
-
-    let contents = server_path_symlink
-        .then_some(tokio::fs::read(&version_path).await?)
-        .and_then(|contents| Some(String::from_utf8(contents)))
-        .transpose()?;
+    let contents = String::from_utf8(std::fs::read(&version_path)?).ok();
 
     let (current, latest) = get_versions(
         file_path,
@@ -194,6 +234,12 @@ async fn main() -> Result<(), BedrockUpdaterError> {
     }
 
     drop(_guard);
+
+    let update_path = server_path.join("update");
+
+    install_server(&client, download_link, update_path).await?;
+
+    info!("Ok");
 
     Ok(())
 }
