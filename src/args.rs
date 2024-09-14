@@ -7,7 +7,11 @@ pub struct Args {
     
     /// Use this server directory
     #[arg(short, long, value_name = "DIR")]
-    pub server_path: String,
+    pub server_dir: String,
+
+    /// Update directory relative to the server directory
+    #[arg(short, long, value_name = "DIR", default_value = "update")]
+    pub update_dir: String,
 
     /// Version path relative to the server directory
     #[arg(short, long, value_name = "FILE", default_value = "version.txt")]

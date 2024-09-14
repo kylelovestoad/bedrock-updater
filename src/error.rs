@@ -6,6 +6,8 @@ use url::ParseError;
 use scraper::error::SelectorErrorKind;
 use zip_extract::ZipExtractError;
 
+pub(crate) type Result<T> = ::std::result::Result<T, BedrockUpdaterError>;
+
 #[derive(thiserror::Error, Debug)]
 pub enum BedrockUpdaterError {
     #[error(transparent)]
@@ -41,5 +43,7 @@ pub enum BedrockUpdaterError {
     #[error("setting global default tracing subscriber failed")]
     GlobalSubscriberFailed(#[from] SetGlobalDefaultError),
     #[error("server zip extraction failed. did the download link download the correct file?")]
-    ServerZipExtractFailed(#[from] ZipExtractError)
+    ServerZipExtractFailed(#[from] ZipExtractError),
+    #[error("could not copy contents of updated ")]
+    UpdateCopyError(#[from] fs_extra::error::Error)
 }
