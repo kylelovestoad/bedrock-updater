@@ -111,9 +111,9 @@ impl<'a> BedrockUpdater<'a> {
         // This is to safeguard incorrect element fetching if the page changes for any reason
         // As of now the minecraft bedrock server download page should only have one download link for each "data platform"
         info!("Checking for extra download elements");
-        select
-            .next()
-            .ok_or(BedrockUpdaterError::TooManyDownloadElements)?;
+        if select.next().is_some() {
+            return Err(BedrockUpdaterError::TooManyDownloadElements);
+        }
 
         info!("No other matching download buttons found, attempting to get link from button");
         // No href element means that the element is most likely incorrect or the page has updated
