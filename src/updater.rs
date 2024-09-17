@@ -54,7 +54,7 @@ impl CommonHeaders for RequestBuilder {
 }
 
 /// An idiomatic way to throw an error
-pub trait ElseErr {
+trait ElseErr {
     fn else_err<E>(self, err: E) -> std::result::Result<(), E>;
 }
 
@@ -243,9 +243,11 @@ impl<'a> BedrockUpdater<'a> {
                 let source = self.update_dir.join(&path);
                 debug!("Copying {source:?} to {destination:?}");
                 if source.is_file() {
+                    debug!("Copying file");
                     // When it is a file, just do a simple copy
                     fs::copy(&source, &destination)?;
                 } else {
+                    debug!("Copying dir");
                     // Recursive copy requires that all directories being copied to exist
                     // fs_extra copy copies inside the destination directory instead of overwriting
                     // The server directory makes more sense here
