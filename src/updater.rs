@@ -326,7 +326,10 @@ impl<'a> BedrockUpdater<'a> {
             .exists()
             .else_err(BedrockUpdaterError::NoServerPath)?;
 
-        let contents = String::from_utf8(std::fs::read(self.version_path)?).ok();
+        info!("Attempting to get version file version");
+        let contents = std::fs::read(self.version_path)
+            .map_or(None,|contents| Some(String::from_utf8(contents)))
+            .transpose()?;
 
         let (current, latest) =
             Self::get_versions(self, cloned_download_link.path(), contents.as_deref()).await?;
