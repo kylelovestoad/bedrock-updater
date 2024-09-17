@@ -42,6 +42,7 @@ async fn main() -> Result<()> {
 
     loop {
         updater.run_updater()
-            .await?;
+            .await
+            .unwrap_or_else(|err| error!("{err}"));
     }
 }

@@ -139,6 +139,7 @@ impl<'a> BedrockUpdater<'a> {
             (None, None) => Err(BedrockUpdaterError::NoCurrentVersion),
             (None, Some(contents)) => Ok(contents),
             (Some(version), None) | (Some(version), Some(_)) => {
+                info!("Writing to version file");
                 std::fs::write(self.version_path, &version)?;
 
                 Ok(version)
@@ -191,6 +192,7 @@ impl<'a> BedrockUpdater<'a> {
     }
 
     /// Attempt to get the html of the bedrock server page from an http request
+    #[tracing::instrument(skip_all)]
     #[tracing::instrument(skip_all)]
     async fn fetch_document(client: &Client) -> Result<Html> {
         info!("Attempting to fetch html document");
