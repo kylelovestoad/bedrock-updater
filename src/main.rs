@@ -3,7 +3,7 @@ use crate::args::Args;
 use clap::Parser;
 use error::Result;
 use std::path::Path;
-use tracing::Level;
+use tracing::{error, Level};
 use updater::BedrockUpdater;
 
 mod error;
@@ -41,6 +41,8 @@ async fn main() -> Result<()> {
     );
 
     loop {
-        updater.run_updater().await?
+        updater.run_updater()
+            .await
+            .unwrap_or_else(|err| error!("{err}"));
     }
 }

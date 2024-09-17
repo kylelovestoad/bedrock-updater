@@ -1,6 +1,4 @@
-use std::{
-    collections::HashSet, fs, io::Cursor, path::Path
-};
+use std::{collections::HashSet, fs, io::Cursor, path::Path};
 
 use bytes::Bytes;
 use fs_extra::dir::CopyOptions;
@@ -105,21 +103,25 @@ impl<'a> BedrockUpdater<'a> {
 
         let mut select = document.select(&download_selector);
 
+        info!("Looking for download element");
         let download_element = select
             .next()
             .ok_or(BedrockUpdaterError::NoDownloadElement)?;
 
         // This is to safeguard incorrect element fetching if the page changes for any reason
         // As of now the minecraft bedrock server download page should only have one download link for each "data platform"
-        if select.next().is_some() {
-            return Err(BedrockUpdaterError::TooManyDownloadElements);
-        }
+        info!("Checking for extra download elements");
+        select
+            .next()
+            .ok_or(BedrockUpdaterError::TooManyDownloadElements)?;
 
+        info!("No other matching download buttons found, attempting to get link from button");
         // No href element means that the element is most likely incorrect or the page has updated
         let link = download_element
             .attr("href")
             .ok_or(BedrockUpdaterError::NoDownloadLinkAttr)?;
 
+        info!("Successfully got link from element");
         Ok(Url::parse(link)?)
     }
 
@@ -197,6 +199,7 @@ impl<'a> BedrockUpdater<'a> {
         let html = page_request.send().await?.text().await?;
 
         let document = Html::parse_document(&html);
+        info!("Found document!");
 
         Ok(document)
     }
@@ -208,15 +211,15 @@ impl<'a> BedrockUpdater<'a> {
         new_version: &'b Version<'b>,
         blacklist: &'b HashSet<&str>,
     ) -> Result<()> {
-        info!("creating updater directory");
+        info!("Creating updater directory");
         std::fs::create_dir_all(self.update_dir)?;
 
-        info!("extracting updated server zip");
+        info!("Extracting updated server zip");
         zip_extract::extract(Cursor::new(bedrock_server_zip), self.update_dir, true)?;
 
         let entries = std::fs::read_dir(self.update_dir)?;
 
-        info!("copying files");
+        info!("Copying files");
         // Start by looping through each of the files in the update dir
         for entry in entries {
             let path = entry?.path();
@@ -236,7 +239,7 @@ impl<'a> BedrockUpdater<'a> {
             if !blacklist.contains(file_name) || !destination.exists() {
                 // The source is always the update directory
                 let source = self.update_dir.join(&path);
-                debug!("copying {source:?} to {destination:?}");
+                debug!("Copying {source:?} to {destination:?}");
                 if source.is_file() {
                     // When it is a file, just do a simple copy
                     fs::copy(&source, &destination)?;
@@ -245,7 +248,7 @@ impl<'a> BedrockUpdater<'a> {
                     // fs_extra copy copies inside the destination directory instead of overwriting
                     // The server directory makes more sense here
                     fs_extra::dir::copy(
-                        &source,    
+                        &source,
                         self.server_dir,
                         &CopyOptions::new().overwrite(true),
                     )?;
@@ -258,7 +261,7 @@ impl<'a> BedrockUpdater<'a> {
         fs::write(self.version_path, new_version.as_str())?;
 
         // Cleanup the update directory
-        info!("cleaning up");
+        info!("Cleaning up");
         std::fs::remove_dir_all(self.update_dir)?;
 
         Ok(())
@@ -289,7 +292,7 @@ impl<'a> BedrockUpdater<'a> {
             let install_guard = install_span.enter();
 
             // This will eventually be turned into an option in the struct, but for now it is hardcoded
-            info!("Reading blacklist");
+            debug!("Reading blacklist");
             let overwrite_blacklist =
                 hashset!["permissions.json", "allowlist.json", "server.properties"];
 
