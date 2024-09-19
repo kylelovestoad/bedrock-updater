@@ -95,7 +95,7 @@ impl<'a> BedrockUpdater<'a> {
 
     /// Gets the download link from the minecraft bedrock server download page
     /// This function's selector should be updated as the document changes
-    #[tracing::instrument]
+    #[tracing::instrument(skip_all)]
     async fn get_latest_download_link(document: &Html) -> Result<Url> {
         let unparsed_selector = selector!();
 
@@ -193,7 +193,6 @@ impl<'a> BedrockUpdater<'a> {
 
     /// Attempt to get the html of the bedrock server page from an http request
     #[tracing::instrument(skip_all)]
-    #[tracing::instrument(skip_all)]
     async fn fetch_document(client: &Client) -> Result<Html> {
         info!("Attempting to fetch html document");
         let page_request = client.get(BEDROCK_SERVER_PAGE).add_common_headers();
@@ -206,6 +205,7 @@ impl<'a> BedrockUpdater<'a> {
         Ok(document)
     }
 
+    /// Extracts and copies the new server files to the server directory 
     #[tracing::instrument(skip_all)]
     async fn install_server<'b>(
         &self,
