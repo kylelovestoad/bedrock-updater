@@ -41,11 +41,11 @@ macro_rules! hashset {
 
 /// Defines some common headers used for the requests to the bedrock server download page
 trait CommonHeaders {
-    fn add_common_headers(self) -> RequestBuilder;
+    fn add_common_headers(self) -> Self;
 }
 
 impl CommonHeaders for RequestBuilder {
-    fn add_common_headers(self) -> RequestBuilder {
+    fn add_common_headers(self) -> Self {
         self.header(ACCEPT, "text/html")
             .header(ACCEPT_LANGUAGE, "en-US,en;q=0.5")
             .header(ACCEPT_ENCODING, "gzip")
