@@ -8,7 +8,7 @@ use reqwest::{
     Client, RequestBuilder, Url,
 };
 use scraper::{Html, Selector};
-use tracing::{debug, info, info_span};
+use tracing::{debug, info, info_span, trace};
 use version_compare::Version;
 
 use crate::error::BedrockUpdaterError;
@@ -103,25 +103,25 @@ impl<'a> BedrockUpdater<'a> {
 
         let mut select = document.select(&download_selector);
 
-        info!("Looking for download element");
+        trace!("Looking for download element");
         let download_element = select
             .next()
             .ok_or(BedrockUpdaterError::NoDownloadElement)?;
 
         // This is to safeguard incorrect element fetching if the page changes for any reason
         // As of now the minecraft bedrock server download page should only have one download link for each "data platform"
-        info!("Checking for extra download elements");
+        trace!("Checking for extra download elements");
         if select.next().is_some() {
             return Err(BedrockUpdaterError::TooManyDownloadElements);
         }
 
-        info!("No other matching download buttons found, attempting to get link from button");
+        trace!("No other matching download buttons found, attempting to get link from button");
         // No href element means that the element is most likely incorrect or the page has updated
         let link = download_element
             .attr("href")
             .ok_or(BedrockUpdaterError::NoDownloadLinkAttr)?;
 
-        info!("Successfully got link from element");
+        trace!("Successfully got link from element");
         Ok(Url::parse(link)?)
     }
 
@@ -134,7 +134,7 @@ impl<'a> BedrockUpdater<'a> {
     where
         'a: 'b,
     {
-        info!("Getting current version");
+        trace!("Getting current version");
         let version_res = match (self.set_first_version, contents) {
             (None, None) => Err(BedrockUpdaterError::NoCurrentVersion),
             (None, Some(contents)) => Ok(contents),
@@ -153,7 +153,7 @@ impl<'a> BedrockUpdater<'a> {
     /// This is fetched from the download link of the file, which contains the version string
     #[tracing::instrument(skip_all)]
     async fn get_latest_version(file_name: &str) -> Result<&str> {
-        info!("Getting latest version");
+        trace!("Getting latest version");
 
         // Regex for a version string with exactly 4 parts
         // It seems unlikely that the minecraft bedrock versioning scheme will change
@@ -178,7 +178,7 @@ impl<'a> BedrockUpdater<'a> {
     where
         'a: 'b,
     {
-        info!("Getting versions");
+        trace!("Getting versions");
         let latest_version_string = Self::get_latest_version(download_link_file);
 
         let current_version_string = Self::get_current_version(self, contents);
@@ -194,13 +194,13 @@ impl<'a> BedrockUpdater<'a> {
     /// Attempt to get the html of the bedrock server page from an http request
     #[tracing::instrument(skip_all)]
     async fn fetch_document(client: &Client) -> Result<Html> {
-        info!("Attempting to fetch html document");
+        trace!("Attempting to fetch html document");
         let page_request = client.get(BEDROCK_SERVER_PAGE).add_common_headers();
 
         let html = page_request.send().await?.text().await?;
 
         let document = Html::parse_document(&html);
-        info!("Found document!");
+        trace!("Found document!");
 
         Ok(document)
     }
@@ -279,12 +279,12 @@ impl<'a> BedrockUpdater<'a> {
     ) -> Result<()> {
         let version_span = info_span!("version_check");
         let version_guard = version_span.enter();
-        info!("Found server version: {current}");
-        info!("Found latest version: {latest}");
+        trace!("Found server version: {current}");
+        trace!("Found latest version: {latest}");
 
         // The program will only try to install the server if it is not up to date
         if current == latest {
-            info!("Server is up to date");
+            trace!("Server is up to date");
             drop(version_guard);
         } else if current > latest {
             info!("Server is most likely a preview version, make sure you set the correct version");
@@ -328,7 +328,7 @@ impl<'a> BedrockUpdater<'a> {
             .exists()
             .else_err(BedrockUpdaterError::NoServerPath)?;
 
-        info!("Attempting to get version file version");
+        trace!("Attempting to get version file version");
         let contents = std::fs::read(self.version_path)
             .map_or(None,|contents| Some(String::from_utf8(contents)))
             .transpose()?;

@@ -3,7 +3,7 @@ use crate::args::Args;
 use clap::Parser;
 use error::Result;
 use std::path::Path;
-use tracing::{error, Level};
+use tracing::{error, warn, Level};
 use updater::BedrockUpdater;
 
 mod error;
@@ -15,14 +15,21 @@ mod updater;
 #[tokio::main]
 async fn main() -> Result<()> {
     // Start by enabling tracing
-    let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(Level::DEBUG)
-        .finish();
-
-    tracing::subscriber::set_global_default(subscriber)?;
-
     // Arguments passed to the program
     let args = Args::parse();
+
+    let subscriber_builder = tracing_subscriber::FmtSubscriber::builder();
+
+    let subscriber_with_level = if args.verbose {
+        subscriber_builder.with_max_level(Level::TRACE)
+    } else if args.quiet {
+        subscriber_builder.with_max_level(Level::WARN)
+    } else {
+        subscriber_builder.with_max_level(Level::INFO)
+    };
+    
+    tracing::subscriber::set_global_default(subscriber_with_level.finish())?;
+
 
     let client = reqwest::ClientBuilder::new().build()?;
 
@@ -41,8 +48,9 @@ async fn main() -> Result<()> {
     );
 
     loop {
-        updater.run_updater()
-            .await
-            .unwrap_or_else(|err| error!("{err}"));
+        updater.run_updater().await.unwrap_or_else(|err| match err {
+            error::BedrockUpdaterError::NoCurrentVersion => warn!("{err}"),
+            _ => error!("{err}")
+        });
     }
 }

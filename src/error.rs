@@ -36,7 +36,7 @@ pub enum BedrockUpdaterError {
     FromUtf8Error(#[from] FromUtf8Error),
     #[error("string slice is not valid utf-8")]
     Utf8Error(#[from] Utf8Error),
-    #[/* TODO */error("unable to find version in file, use")]
+    #[error("unable to find version in file, use --set-first-version")]
     NoCurrentVersion,
     #[error("server path does not exist")]
     NoServerPath,
@@ -44,6 +44,6 @@ pub enum BedrockUpdaterError {
     GlobalSubscriberFailed(#[from] SetGlobalDefaultError),
     #[error("server zip extraction failed. did the download link download the correct file?")]
     ServerZipExtractFailed(#[from] ZipExtractError),
-    #[error("could not copy contents of updated ")]
+    #[error("could not copy contents of update files")]
     UpdateCopyError(#[from] fs_extra::error::Error)
 }

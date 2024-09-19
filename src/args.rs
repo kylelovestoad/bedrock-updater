@@ -14,11 +14,19 @@ pub struct Args {
     pub update_dir: String,
 
     /// Version path relative to the server directory
-    #[arg(short, long, value_name = "FILE", default_value = "version.txt")]
+    #[arg(long, value_name = "FILE", default_value = "version.txt")]
     pub version_file: String,
 
     /// Set the version of the server, generally used for setting the initial version
     #[arg(long, value_name = "VERSION")]
-    pub set_first_version: Option<String>
+    pub set_first_version: Option<String>,
+
+    /// Enable quiet mode
+    #[arg(short, long)]
+    pub quiet: bool,
+
+    /// Enable verbose mode
+    #[arg(short, long)]
+    pub verbose: bool
 
 }
